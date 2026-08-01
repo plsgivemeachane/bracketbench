@@ -100,3 +100,5 @@ desktop.ini
 # Project-specific caches
 *.cache
 cache/
+
+.claude
