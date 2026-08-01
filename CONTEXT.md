@@ -57,10 +57,13 @@ and T2; does not exist for T4.
 _Avoid_: source, target, golden
 
 **Edit script**:
-The model's output format for a repair task. A sequence of find-and-replace operations
-(each: `old` substring -> `new` substring) that, when applied to the Broken JSON, yield the
-repaired JSON. The repaired JSON is then scored by the normal ladder. This is what makes
-BracketBench test *surgical repair* rather than *regeneration* (see ADR-0005).
+The model's output format for a repair task: a JSON array of `{"old", "new"}`
+find-and-replace operations applied in array order, each against the result of the previous.
+An `old` that matches zero positions is skipped (no-op); one that matches multiple positions
+is skipped as ambiguous. A malformed script maps to the 0.0 tier. When applied to the Broken
+JSON, the script yields the repaired JSON, which is then scored by the normal ladder. This
+is what makes BracketBench test *surgical repair* rather than *regeneration* (the contract is
+specified in ADR-0006; the edit-script-not-JSON decision in ADR-0005).
 _Avoid_: diff, patch, edits (use "edit script" for the model's output; "patch" reserved for
 the applied result)
 
