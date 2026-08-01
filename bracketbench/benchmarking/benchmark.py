@@ -15,6 +15,8 @@ from .models import BenchmarkResult
 from .test_cases import TestCase
 from .scoring import ScoringEngine
 from .results import ResultsHandler
+from bracketbench.repair.evaluate import evaluate as evaluate_t1
+from bracketbench.repair.t1 import build_t1_case, build_t1_prompt
 
 
 class Benchmarking:
@@ -233,26 +235,15 @@ class Benchmarking:
         return f"Benchmarking(name='{self.name}', test_cases={len(self.test_cases)}, results={len(self.results)})"
 
 
-# Built-in standard test cases used when the CLI requests the "standard" set.
-_STANDARD_TEST_CASES: List[TestCase] = [
-    TestCase(
-        id="standard-json-repair",
-        input_prompt="Repair the following JSON and return ONLY valid JSON: {name: \"Alice\" age: 30}",
-        expected_output='{"name": "Alice", "age": 30}',
-        metadata={"category": "json_repair", "difficulty": "easy"},
-    ),
-    TestCase(
-        id="standard-bracket-balance",
-        input_prompt="Balance the brackets and return ONLY the corrected string: ([a,b]c)",
-        expected_output="([a,b]c)",
-        metadata={"category": "bracket_balance", "difficulty": "easy"},
-    ),
-    TestCase(
-        id="standard-follow-instructions",
-        input_prompt="Return ONLY the word 'pong' and nothing else.",
-        expected_output="pong",
-        metadata={"category": "instruction_following", "difficulty": "easy"},
-    ),
+# The default T1 case set the CLI runs. Each entry is a (valid_json, bracket_index)
+# pair (CONTEXT.md, ADR-0001): the Breaker deletes one structural closing bracket at the
+# given index, the model emits an edit script, and the result is scored on the 4-tier ladder.
+# These are deterministic, network-free fixtures so the CLI exercises the real T1 pipeline
+# (issue #3) rather than the legacy placeholder tests scored by string similarity.
+_DEFAULT_T1_CASES: List[tuple] = [
+    ("{\"a\": 1}", 0),
+    ("{\"name\": \"Alice\", \"age\": 30}", 0),
+    ("[1, 2, 3]", 0),
 ]
 
 
@@ -291,27 +282,12 @@ class BenchmarkRunner:
         """
         Build the list of TestCase objects for this run.
 
-        Currently only the built-in ``"standard"`` set is supported. Unknown
-        names fall back to the standard set so the run never fails silently on
-        an empty test-case list.
+        The CLI runs the built-in T1 case set (CONTEXT.md, ADR-0001); the requested
+        names are recorded as metadata only. T2/T3/T4 are not yet wired and are
+        excluded from this run.
         """
         names = [n.strip() for n in test_cases if n and n.strip()] if test_cases else []
-        if not names or any(n.lower() == "standard" for n in names):
-            return list(_STANDARD_TEST_CASES)
-        # Unknown set names: fall back to standard rather than raising, so the
-        # CLI keeps working. Each requested name is recorded as metadata.
-        cases = []
-        for name in names:
-            base = _STANDARD_TEST_CASES[0]
-            cases.append(
-                TestCase(
-                    id=f"{name}-{base.id}",
-                    input_prompt=base.input_prompt,
-                    expected_output=base.expected_output,
-                    metadata={**base.metadata, "requested_set": name},
-                )
-            )
-        return cases
+        return [(valid, idx, names) for (valid, idx) in _DEFAULT_T1_CASES]
 
     def run(
         self,
@@ -333,7 +309,7 @@ class BenchmarkRunner:
             Mapping of model name -> list of :class:`BenchmarkResult` objects
             aggregated across all iterations.
         """
-        cases = self._build_test_cases(test_cases)
+        case_specs = self._build_test_cases(test_cases)
         model_names = llm_manager.list_models()
         if not model_names:
             raise ValueError("No models registered in the LLM manager.")
@@ -342,25 +318,47 @@ class BenchmarkRunner:
 
         for model_name in model_names:
             model = llm_manager.get_model(model_name)
-
-            def generate_function(prompt: str, _model=model, **kwargs) -> str:
-                return _model.generate(prompt, **kwargs)
-
-            benchmark = Benchmarking(
-                generate_function=generate_function,
-                name=model_name,
-                config={"metrics": metrics} if metrics else None,
-            )
-            benchmark.add_test_cases(cases)
-
             model_results: List[BenchmarkResult] = []
+
             for iteration in range(self.iterations):
-                benchmark.run_benchmark()
-                for result in benchmark.get_results():
-                    # Tag every result with the originating model + iteration so
-                    # downstream analysis and saved files stay attributable.
-                    result.metadata["model_name"] = model_name
-                    result.metadata["iteration"] = iteration + 1
+                # Run the real T1 pipeline (issue #3): Breaker breaks each case,
+                # the model emits an edit script, the applier applies it, the
+                # 4-tier scorer scores the repaired text (0/50/90/100), and the
+                # partial scoreboard is computed. This replaces the legacy
+                # difflib-similarity placeholder path.
+                t1_cases = [(valid, idx) for (valid, idx, _names) in case_specs]
+                evaluation = evaluate_t1(model, t1_cases=t1_cases)
+                requested_sets = case_specs[0][2] if case_specs else []
+
+                for index, run_result in enumerate(evaluation.cases):
+                    valid_json, bracket_index, _ = case_specs[index]
+                    case_obj = build_t1_case(valid_json, bracket_index)
+                    prompt = build_t1_prompt(case_obj.broken_text)
+                    result = BenchmarkResult(
+                        test_case_id=f"t1-bracket-{bracket_index}-{index}",
+                        input_prompt=prompt,
+                        expected_output=valid_json,
+                        actual_output=run_result.raw_edit_script,
+                        execution_time=0.0,
+                        score=float(run_result.score),
+                        metadata={
+                            "test": "T1",
+                            "tier": run_result.tier,
+                            "valid_json": valid_json,
+                            "bracket_index": bracket_index,
+                            "repaired_text": run_result.repaired_text,
+                            "breakage_record": {
+                                "break_type": run_result.breakage_record.break_type,
+                                "position": run_result.breakage_record.position,
+                                "deleted_char": run_result.breakage_record.deleted_char,
+                            },
+                            "scoreboard": evaluation.scoreboard,
+                            "model_name": model_name,
+                            "iteration": iteration + 1,
+                            "requested_sets": requested_sets,
+                            "metrics": metrics,
+                        },
+                    )
                     model_results.append(result)
 
             all_results[model_name] = model_results
