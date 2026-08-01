@@ -1,0 +1,10 @@
+# BracketBench LLM Benchmarking System - Production Dependencies
+
+# Core LLM integration
+openai>=1.30.0,<2.0.0  # OpenAI Python library for GPT models
+
+# Configuration management
+PyYAML>=6.0,<7.0.0  # YAML configuration file parsing
+
+# Data handling and utilities
+dataclasses-json>=0.6.0,<1.0.0  # JSON serialization for dataclasses (optional but recommended)

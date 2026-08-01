@@ -1,0 +1,23 @@
+# BracketBench LLM Benchmarking System - Development Dependencies
+
+# Include production dependencies
+-r requirements.txt
+
+# Testing frameworks
+pytest>=7.0.0,<8.0.0  # Advanced testing framework
+pytest-cov>=4.0.0,<5.0.0  # Coverage reporting for pytest
+pytest-mock>=3.0.0,<4.0.0  # Mocking utilities for pytest
+
+# Code quality and linting
+flake8>=6.0.0,<7.0.0  # Code style and error checking
+black>=23.0.0,<24.0.0  # Code formatting
+isort>=5.0.0,<6.0.0  # Import sorting
+mypy>=1.0.0,<2.0.0  # Static type checking
+
+# Documentation
+sphinx>=5.0.0,<6.0.0  # Documentation generation
+sphinx-rtd-theme>=1.0.0,<2.0.0  # Read the Docs theme for Sphinx
+
+# Development tools
+pre-commit>=3.0.0,<4.0.0  # Git hooks for code quality
+tox>=4.0.0,<5.0.0  # Testing across multiple Python versions
