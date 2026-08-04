@@ -1,21 +1,12 @@
+"""Benchmarking utilities for BracketBench.
+
+Holds the synthetic JSON :mod:`~bracketbench.benchmarking.generator` (Ticket B / issue
+#10) -- a seeded, parameterized emitter of valid JSON that feeds the Breaker. The legacy
+generic ``Benchmarking`` / ``BenchmarkRunner`` / ``TestCase`` / ``ScoringEngine`` /
+``ResultsHandler`` scaffolding has been stripped per ADR-0001; the focused product's runner
+lives in :mod:`bracketbench.repair.evaluate`.
 """
-Benchmarking module for BracketBench.
 
-This module provides simplified classes and functions for running benchmarks on LLMs,
-including test case management, execution, scoring, and result handling.
-"""
+from .generator import GenerateError, generate
 
-from .benchmark import Benchmarking, BenchmarkRunner
-from .models import BenchmarkResult
-from .test_cases import TestCase
-from .scoring import ScoringEngine
-from .results import ResultsHandler
-
-__all__ = [
-    "Benchmarking",
-    "BenchmarkRunner",
-    "BenchmarkResult",
-    "TestCase",
-    "ScoringEngine",
-    "ResultsHandler",
-]
+__all__ = ["generate", "GenerateError"]
