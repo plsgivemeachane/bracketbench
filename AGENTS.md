@@ -11,3 +11,5 @@ Uses the five canonical triage labels as-is (`needs-triage`, `needs-info`, `read
 ### Domain docs
 
 Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+- Custom requirement: Please commit after a /dev is triggered. or any change thhat bigger than a simple feature.
