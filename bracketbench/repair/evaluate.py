@@ -1,14 +1,14 @@
-"""The top-level ``evaluate`` entry point (issue #3 tracer bullet).
+"""The top-level ``evaluate`` entry point (issue #3 tracer bullet; T2 added in #4).
 
 ``evaluate`` runs the available tests against a model conforming to the existing
 ``LLMInterface`` and returns an ``Evaluation`` carrying per-test 0-100 scores plus the
-computable scoreboard aggregate. For the T1 tracer bullet it runs T1 only: it builds each T1
-case, constructs the T1 prompt, calls ``model.generate``, applies the edit script, scores the
-repaired text, and aggregates into the partial scoreboard.
+computable scoreboard aggregate. It runs T1 (single-breakage) and T2 (multi-breakage): for
+each case it builds the case, constructs the prompt, calls ``model.generate``, applies the
+edit script, scores the repaired text, and aggregates both into the scoreboard.
 
 The ``Evaluation`` retains enough to audit a run: the model's raw edit-script output, the
-applied repaired text, the breakage record, and the tier reached (per the issue's acceptance
-criteria).
+applied repaired text, the breakage record(s), and the tier reached (per the issue's
+acceptance criteria). T2 cases retain the FULL breakage record (all N breakages).
 """
 
 from dataclasses import dataclass, field
@@ -20,6 +20,7 @@ from bracketbench.repair.applier import apply
 from bracketbench.repair.scoring import ScoreResult, T1T2Scorer, TierScoreConfig
 from bracketbench.repair.scoreboard import Scoreboard
 from bracketbench.repair.t1 import build_t1_case, build_t1_prompt
+from bracketbench.repair.t2 import build_t2_case, build_t2_prompt
 
 
 @dataclass(frozen=True)
@@ -34,22 +35,39 @@ class T1RunResult:
 
 
 @dataclass(frozen=True)
+class T2RunResult:
+    """The audit record for one T2 case run.
+
+    ``breakage_records`` carries ALL N breakages of the case, in application order.
+    """
+
+    raw_edit_script: str
+    repaired_text: str
+    breakage_records: List[BreakRecord]
+    tier: str
+    score: int
+
+
+@dataclass(frozen=True)
 class Evaluation:
     """The result of an ``evaluate`` run.
 
-    Carries the T1 score (0-100), the computable partial scoreboard aggregate, and the audit
-    data needed to inspect a run. For a single-case T1 run the headline audit fields
-    (``raw_edit_script``, ``repaired_text``, ``breakage_record``, ``tier``) refer to that one
-    case; ``cases`` holds the full per-case list for multi-case runs.
+    Carries the T1 and T2 scores (0-100 each), the computable partial scoreboard aggregate,
+    and the audit data needed to inspect a run. For a single-case T1 run the headline audit
+    fields (``raw_edit_script``, ``repaired_text``, ``breakage_record``, ``tier``) refer to
+    that one case; ``cases`` holds the full per-case T1 list, ``t2_cases`` the full per-case
+    T2 list (each with its full breakage record).
     """
 
     t1_score: int
+    t2_score: int
     scoreboard: float
     tier: str
     raw_edit_script: str
     repaired_text: str
     breakage_record: BreakRecord
     cases: List[T1RunResult] = field(default_factory=list)
+    t2_cases: List[T2RunResult] = field(default_factory=list)
 
 
 # Default unified-scoreboard weights (CONTEXT.md): 0.4*T1 + 0.3*T2 + 0.2*T3 + 0.1*T4.
@@ -64,26 +82,34 @@ _DEFAULT_SCOREBOARD_WEIGHTS: Dict[str, float] = {
 def evaluate(
     model: LLMInterface,
     t1_cases: Optional[List[Tuple[str, int]]] = None,
+    t2_cases: Optional[List[Tuple[str, List[int]]]] = None,
     *,
     tier_config: Optional[TierScoreConfig] = None,
     scoreboard_weights: Optional[Dict[str, float]] = None,
 ) -> Evaluation:
-    """Run T1 against ``model`` and return an ``Evaluation`` with the T1 score and aggregate.
+    """Run T1 and T2 against ``model`` and return an ``Evaluation`` with both scores.
 
     Args:
         model: An LLM conforming to ``LLMInterface``. Must be initialized or auto-initialize
             on first ``generate`` (the stub model does).
         t1_cases: A list of ``(valid_json, bracket_index)`` pairs defining the T1 cases to
             run. If empty or None, T1 scores nothing (t1_score defaults to 0).
+        t2_cases: A list of ``(valid_json, bracket_indices)`` pairs defining the T2 cases to
+            run (each ``bracket_indices`` is a non-empty list of per-step bracket indexes).
+            If empty or None, T2 scores nothing (t2_score defaults to 0).
         tier_config: The tier scores (ADR-0002). Defaults to ``TierScoreConfig()``.
         scoreboard_weights: The scoreboard weight map. Defaults to the unified scoreboard.
 
     Returns:
-        An ``Evaluation`` carrying the T1 score (0-100), the partial scoreboard aggregate,
-        and per-case audit data (raw edit script, repaired text, breakage record, tier).
+        An ``Evaluation`` carrying the T1 and T2 scores (0-100 each), the partial scoreboard
+        aggregate over whichever tests ran, and per-case audit data (raw edit script,
+        repaired text, breakage record(s), tier). T2 audit entries retain the full breakage
+        record (all N breakages).
     """
     if t1_cases is None:
         t1_cases = []
+    if t2_cases is None:
+        t2_cases = []
     config = tier_config if tier_config is not None else TierScoreConfig()
     scorer = T1T2Scorer(config)
     weights = (
@@ -112,29 +138,59 @@ def evaluate(
             )
         )
 
-    t1_score = _mean([r.score for r in run_results]) if run_results else 0
-    aggregate = scoreboard.aggregate({"T1": t1_score}) if run_results else 0.0
+    t2_run_results: List[T2RunResult] = []
+    for valid_json, bracket_indices in t2_cases:
+        case = build_t2_case(valid_json, bracket_indices)
+        prompt = build_t2_prompt(case.broken_text)
+        raw_edit_script = model.generate(prompt)
+        apply_result = apply(case.broken_text, raw_edit_script)
+        score_result: ScoreResult = scorer.score(
+            apply_result.repaired_text, case.original_object
+        )
+        t2_run_results.append(
+            T2RunResult(
+                raw_edit_script=raw_edit_script,
+                repaired_text=apply_result.repaired_text,
+                breakage_records=case.breakage_records,
+                tier=score_result.tier,
+                score=score_result.score,
+            )
+        )
 
-    # For the single-case tracer bullet, expose that case's audit fields on the Evaluation.
+    t1_score = _mean([r.score for r in run_results]) if run_results else 0
+    t2_score = _mean([r.score for r in t2_run_results]) if t2_run_results else 0
+
+    scores: Dict[str, float] = {}
+    if run_results:
+        scores["T1"] = t1_score
+    if t2_run_results:
+        scores["T2"] = t2_score
+    aggregate = scoreboard.aggregate(scores) if scores else 0.0
+
+    # For a single-case T1 run, expose that case's audit fields on the Evaluation.
     if run_results:
         single = run_results[0]
         return Evaluation(
             t1_score=t1_score,
+            t2_score=t2_score,
             scoreboard=aggregate,
             tier=single.tier,
             raw_edit_script=single.raw_edit_script,
             repaired_text=single.repaired_text,
             breakage_record=single.breakage_record,
             cases=run_results,
+            t2_cases=t2_run_results,
         )
     return Evaluation(
         t1_score=0,
-        scoreboard=0.0,
+        t2_score=t2_score,
+        scoreboard=aggregate,
         tier="unparseable",
         raw_edit_script="",
         repaired_text="",
         breakage_record=BreakRecord(break_type="none", position=-1, deleted_char=""),
         cases=[],
+        t2_cases=t2_run_results,
     )
 
 
