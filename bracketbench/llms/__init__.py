@@ -1,25 +1,12 @@
-"""
-LLM management module for BracketBench.
+"""LLM interface for BracketBench.
 
-This module provides classes and functions for managing different Large Language Models,
-including their initialization, configuration, and interaction.
+The focused JSON-repair path depends only on :class:`~bracketbench.llms.base.LLMInterface`
+-- the minimal contract a repair model must satisfy (``generate(prompt) -> str`` emitting an
+edit script per ADR-0005/0006). Concrete provider implementations (OpenAI, OpenRouter) were
+part of the legacy multi-provider registry stripped per ADR-0001; bring your own model by
+subclassing ``LLMInterface``.
 """
 
 from .base import LLMInterface
-from .openai_llms import OpenAILLM, GPT35LLM, GPT4LLM, GPT4TurboLLM
-from .manager import LLMManager, ModelRegistry
 
-__all__ = [
-    # Base interface
-    "LLMInterface",
-    
-    # OpenAI implementations
-    "OpenAILLM",
-    "GPT35LLM",
-    "GPT4LLM",
-    "GPT4TurboLLM",
-    
-    # Manager and registry
-    "LLMManager",
-    "ModelRegistry",
-]
+__all__ = ["LLMInterface"]

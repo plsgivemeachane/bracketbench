@@ -103,3 +103,6 @@ cache/
 
 .claude
 config.yaml
+
+# Local issue/spec scratch space (yuzukadev /dev tickets live here locally)
+.scratch/

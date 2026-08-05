@@ -52,10 +52,9 @@ class BracketBenchTestRunner:
     
     def __init__(self) -> None:
         """Initialize the test runner."""
-        self.test_modules = [
-            "test_benchmarking",
-            "test_llms"
-        ]
+        # Discover test modules dynamically so the runner stays in sync with the suite
+        # (the legacy hardcoded list referenced modules stripped per ADR-0001).
+        self.test_modules: List[str] = self.discover_tests("tests")
         self.results: List[TestResult] = []
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
@@ -70,7 +69,7 @@ class BracketBenchTestRunner:
         Returns:
             List of test module names
         """
-        test_modules = []
+        test_modules: List[str] = []
         
         if not os.path.exists(test_dir):
             print(f"Warning: Test directory '{test_dir}' not found")
@@ -144,8 +143,8 @@ class BracketBenchTestRunner:
             self.results.append(result)
             
             # Print summary for this module
-            status = "✓ PASS" if result.success else "✗ FAIL"
-            print(f"\n{status}: {module_name} "
+            status = "PASS" if result.success else "FAIL"
+            print(f"\n[{status}]: {module_name} "
                   f"({result.passed_tests}/{result.total_tests} passed, "
                   f"{result.execution_time:.2f}s)")
             
@@ -224,7 +223,7 @@ class BracketBenchTestRunner:
         overall_success = total_failures == 0 and total_errors == 0
         
         # Overall status
-        status = "✓ ALL TESTS PASSED" if overall_success else "✗ SOME TESTS FAILED"
+        status = "ALL TESTS PASSED" if overall_success else "SOME TESTS FAILED"
         print(f"\n{status}")
         print(f"Total Tests: {total_tests}")
         print(f"Passed: {total_passed}")
@@ -238,8 +237,8 @@ class BracketBenchTestRunner:
         print("\nModule Breakdown:")
         print("-" * 50)
         for result in self.results:
-            status = "✓" if result.success else "✗"
-            print(f"{status} {result.module_name}: "
+            status = "PASS" if result.success else "FAIL"
+            print(f"[{status}] {result.module_name}: "
                   f"{result.passed_tests}/{result.total_tests} "
                   f"({result.execution_time:.2f}s)")
         
@@ -275,9 +274,12 @@ def main():
     
     args = parser.parse_args()
     
-    # Add test directory to Python path
-    if args.test_dir not in sys.path:
-        sys.path.insert(0, args.test_dir)
+    # Add the test directory AND the repo root to Python path so both the test modules
+    # and the bracketbench package are importable when run as `py tests/run_tests.py`.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for p in (args.test_dir, repo_root):
+        if p not in sys.path:
+            sys.path.insert(0, p)
     
     # Create test runner
     runner = BracketBenchTestRunner()
@@ -306,8 +308,8 @@ def main():
         runner.results = [result]
         
         # Print single module summary
-        status = "✓ PASS" if result.success else "✗ FAIL"
-        print(f"\n{status}: {args.module} "
+        status = "PASS" if result.success else "FAIL"
+        print(f"\n[{status}]: {args.module} "
               f"({result.passed_tests}/{result.total_tests} passed, "
               f"{result.execution_time:.2f}s)")
     else:
