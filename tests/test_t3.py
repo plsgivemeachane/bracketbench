@@ -242,7 +242,7 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         broken = t3_cases.CORRUPT_SOURCE_NOTEBOOK
         model = StubModel(_whole_text_script(broken, t3_cases.VALID_NOTEBOOK))
 
-        result = evaluate(model, t3_cases=[broken])
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[broken], t4_cases=[])
 
         self.assertIsInstance(result, Evaluation)
         self.assertEqual(result.t3_score, 100)
@@ -254,7 +254,7 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         broken = t3_cases.MISSING_EXECUTION_COUNT_NOTEBOOK
         model = StubModel("[]")  # empty script: every `old` matches zero positions
 
-        result = evaluate(model, t3_cases=[broken])
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[broken], t4_cases=[])
 
         # parses + cell integrity pass; schema + semantic consistency fail -> 2 of 4.
         self.assertEqual(result.t3_score, 50)
@@ -264,7 +264,7 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         """A malformed script leaves the broken text unparseable -> the gate scores 0."""
         model = StubModel("not json at all")
 
-        result = evaluate(model, t3_cases=[t3_cases.UNPARSEABLE_NOTEBOOK])
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[t3_cases.UNPARSEABLE_NOTEBOOK], t4_cases=[])
 
         self.assertEqual(result.t3_score, 0)
         self.assertEqual(result.t3_cases[0].tier, "unparseable")
@@ -273,7 +273,7 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         """evaluate runs every curated T3 case and aggregates the mean."""
         model = RepairAllT3StubModel("")
 
-        result = evaluate(model, t3_cases=list(t3_cases.DEFAULT_T3_CASES))
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=list(t3_cases.DEFAULT_T3_CASES), t4_cases=[])
 
         self.assertEqual(result.t3_score, 100)
         self.assertEqual(len(result.t3_cases), len(t3_cases.DEFAULT_T3_CASES))
@@ -283,7 +283,7 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         """No T3 cases -> t3_score defaults to 0 and the Evaluation still carries it."""
         model = StubModel("ignored")
 
-        result = evaluate(model)
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertEqual(result.t3_score, 0)
         self.assertEqual(result.t3_cases, [])
@@ -299,7 +299,9 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         result = evaluate(
             model,
             t1_cases=[('{"a": 1}', 0)],
+            t2_cases=[],
             t3_cases=[broken],
+            t4_cases=[],
         )
 
         self.assertEqual(result.t1_score, 100)
@@ -314,7 +316,9 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         result = evaluate(
             model,
             t1_cases=[('{"a": 1}', 0)],
+            t2_cases=[],
             t3_cases=[t3_cases.CORRUPT_SOURCE_NOTEBOOK],
+            t4_cases=[],
         )
 
         # T1=100; T3 = corrupted notebook unchanged: parses(0.25) + semantic(0.25) = 50.
@@ -329,7 +333,9 @@ class TestT3EvaluateIntegration(unittest.TestCase):
         result = evaluate(
             model,
             t1_cases=[('{"a": 1}', 0)],
+            t2_cases=[],
             t3_cases=[t3_cases.CORRUPT_SOURCE_NOTEBOOK],
+            t4_cases=[],
             scoreboard_weights={"T1": 0.4, "T2": 0.3, "T3": 0.0, "T4": 0.1},
         )
 
@@ -344,3 +350,4 @@ class TestT3EvaluateIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

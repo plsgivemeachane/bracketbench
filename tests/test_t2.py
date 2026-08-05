@@ -131,7 +131,7 @@ class TestT2MultiBreakage(unittest.TestCase):
         )
         model = StubModel(canned_script)
 
-        result = evaluate(model, t2_cases=[(valid_json, [0, 1])])
+        result = evaluate(model, t1_cases=[], t2_cases=[(valid_json, [0, 1])], t3_cases=[], t4_cases=[])
 
         self.assertIsInstance(result, Evaluation)
         self.assertEqual(result.t2_score, 100)
@@ -189,7 +189,7 @@ class TestT2MultiBreakage(unittest.TestCase):
         )
         model = StubModel(canned_script)
 
-        result = evaluate(model, t2_cases=[(valid_json, [0, 1])])
+        result = evaluate(model, t1_cases=[], t2_cases=[(valid_json, [0, 1])], t3_cases=[], t4_cases=[])
 
         # The shared ladder's value-fidelity tier: default 0.9 scaled to 90.
         self.assertEqual(result.t2_score, 90)
@@ -212,6 +212,8 @@ class TestT2MultiBreakage(unittest.TestCase):
             model,
             t1_cases=[('{"a": 1}', 0)],
             t2_cases=[('{"a": [1, 2], "b": {"c": 3}}', [0, 1])],
+            t3_cases=[],
+            t4_cases=[],
         )
 
         self.assertEqual(result.t1_score, 100)
@@ -234,6 +236,8 @@ class TestT2MultiBreakage(unittest.TestCase):
             model,
             t1_cases=[('{"a": 1}', 0)],
             t2_cases=[('{"a": [1, 2], "b": {"c": 3}}', [0, 1])],
+            t3_cases=[],
+            t4_cases=[],
         )
 
         self.assertEqual(result.t1_score, 50)
@@ -243,3 +247,4 @@ class TestT2MultiBreakage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

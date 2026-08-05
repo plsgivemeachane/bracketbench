@@ -97,7 +97,7 @@ class TestHardT1EndToEnd(unittest.TestCase):
         """The known-correct id-anchored script earns 100 / exact_fidelity."""
         model = StubModel(self._correct_script())
 
-        result = evaluate(model, t1_cases=[(self.valid_json, self.bracket_index)])
+        result = evaluate(model, t1_cases=[(self.valid_json, self.bracket_index)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertIsInstance(result, Evaluation)
         self.assertEqual(result.t1_score, 100)
@@ -121,7 +121,7 @@ class TestHardT1EndToEnd(unittest.TestCase):
         self.assertNotEqual(self.analysis.naive_old, self.analysis.id_anchored_old)
 
         model = StubModel(self._naive_script())
-        result = evaluate(model, t1_cases=[(self.valid_json, self.bracket_index)])
+        result = evaluate(model, t1_cases=[(self.valid_json, self.bracket_index)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertEqual(result.t1_score, 0)
         self.assertEqual(result.tier, "unparseable")

@@ -129,7 +129,7 @@ class TestT4Evaluate(unittest.TestCase):
         canned_script = '[{"old": "42", "new": "42}"}]'
         model = StubModel([canned_script])
 
-        result = evaluate(model, t4_cases=[broken_text])
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[], t4_cases=[broken_text])
 
         self.assertIsInstance(result, Evaluation)
         self.assertEqual(result.t4_score, 100)
@@ -144,7 +144,7 @@ class TestT4Evaluate(unittest.TestCase):
         broken_text = '{"name": "test", "value": 42'
         model = StubModel(["not json at all"])
 
-        result = evaluate(model, t4_cases=[broken_text])
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[], t4_cases=[broken_text])
 
         self.assertEqual(result.t4_score, 0)
         self.assertEqual(result.tier, "unparseable")
@@ -160,7 +160,7 @@ class TestT4Evaluate(unittest.TestCase):
         # "999" appears nowhere in the broken text -> zero_match -> skipped (ADR-0006).
         model = StubModel(['[{"old": "999", "new": "999}"}]'])
 
-        result = evaluate(model, t4_cases=[broken_text])
+        result = evaluate(model, t1_cases=[], t2_cases=[], t3_cases=[], t4_cases=[broken_text])
 
         self.assertEqual(result.repaired_text, broken_text)
         self.assertEqual(result.t4_score, 0)
@@ -177,6 +177,8 @@ class TestT4Evaluate(unittest.TestCase):
         result = evaluate(
             model,
             t1_cases=[('{"a": 1}', 0)],
+            t2_cases=[],
+            t3_cases=[],
             t4_cases=['{"name": "test", "value": 42'],
         )
 
@@ -197,6 +199,8 @@ class TestT4Evaluate(unittest.TestCase):
         result = evaluate(
             model,
             t1_cases=[('{"a": 1}', 0)],
+            t2_cases=[],
+            t3_cases=[],
             t4_cases=['{"name": "test", "value": 42'],
         )
 
@@ -208,7 +212,7 @@ class TestT4Evaluate(unittest.TestCase):
         """No t4_cases -> t4_score 0 and the aggregate renormalizes over T1 alone."""
         model = StubModel(['[{"old": ": 1", "new": ": 1}"}]'])
 
-        result = evaluate(model, t1_cases=[('{"a": 1}', 0)])
+        result = evaluate(model, t1_cases=[('{"a": 1}', 0)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertEqual(result.t4_score, 0)
         self.assertEqual(result.scoreboard, 100.0)
@@ -217,3 +221,4 @@ class TestT4Evaluate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

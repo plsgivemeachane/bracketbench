@@ -63,7 +63,7 @@ class TestEvaluateT1TracerBullet(unittest.TestCase):
         canned_script = '[{"old": ": 1", "new": ": 1}"}]'
         model = StubModel(canned_script)
 
-        result = evaluate(model, t1_cases=[(valid_json, bracket_index)])
+        result = evaluate(model, t1_cases=[(valid_json, bracket_index)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertIsInstance(result, Evaluation)
         # T1 score is 100 (exact-fidelity tier).
@@ -85,7 +85,7 @@ class TestEvaluateT1TracerBullet(unittest.TestCase):
         canned_script = '[{"old": ": 1", "new": ": 2}"}]'
         model = StubModel(canned_script)
 
-        result = evaluate(model, t1_cases=[(valid_json, 0)])
+        result = evaluate(model, t1_cases=[(valid_json, 0)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertEqual(result.t1_score, 50)
         self.assertEqual(result.tier, "structural")
@@ -98,7 +98,7 @@ class TestEvaluateT1TracerBullet(unittest.TestCase):
         valid_json = '{"a": 1}'
         model = StubModel("not json at all")
 
-        result = evaluate(model, t1_cases=[(valid_json, 0)])
+        result = evaluate(model, t1_cases=[(valid_json, 0)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         self.assertEqual(result.t1_score, 0)
         self.assertEqual(result.tier, "unparseable")
@@ -112,7 +112,7 @@ class TestEvaluateT1TracerBullet(unittest.TestCase):
         valid_json = '{"a": 1}'
         model = StubModel('[{"old": ": 1", "new": ": 1}"}]')
 
-        result = evaluate(model, t1_cases=[(valid_json, 0)])
+        result = evaluate(model, t1_cases=[(valid_json, 0)], t2_cases=[], t3_cases=[], t4_cases=[])
 
         # T1-only partial scoreboard: T1=100, others unavailable -> aggregate 100.
         self.assertEqual(result.scoreboard, 100.0)
@@ -120,3 +120,4 @@ class TestEvaluateT1TracerBullet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

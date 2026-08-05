@@ -1,4 +1,4 @@
-"""The top-level ``evaluate`` entry point (issues #3, #4, #5, #6).
+"""The top-level ``evaluate`` entry point (issues #3, #4, #5, #6, #7).
 
 ``evaluate`` runs the available tests against a model conforming to the existing
 ``LLMInterface`` and returns an ``Evaluation`` carrying per-test 0-100 scores plus the
@@ -6,6 +6,10 @@ computable scoreboard aggregate. It runs T1 (single-breakage), T2 (multi-breakag
 (complex ipynb repair), and T4 (real-world messy JSON): for each case it builds the case,
 constructs the prompt, calls ``model.generate``, applies the edit script, scores the
 repaired text, and aggregates all into the scoreboard.
+
+When no custom cases are supplied, ``evaluate(model)`` uses the default case sets for
+all four tests (issue #7), so the benchmark runs out-of-the-box. Supplying custom cases
+for any test overrides the defaults for that test only.
 
 The ``Evaluation`` retains enough to audit a run: the model's raw edit-script output, the
 applied repaired text, the breakage record(s), and the tier reached. T2 cases retain the
@@ -16,6 +20,13 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from bracketbench.breaker import BreakRecord
+from bracketbench.default_cases import (
+    DEFAULT_T2_CASES,
+    UNIFIED_SCOREBOARD_WEIGHTS,
+    default_t1_cases,
+    default_t3_cases,
+    default_t4_cases,
+)
 from bracketbench.llms.base import LLMInterface
 from bracketbench.repair.applier import apply
 from bracketbench.repair.scoring import ScoreResult, T1T2Scorer, TierScoreConfig
@@ -106,12 +117,8 @@ class Evaluation:
 
 
 # Default unified-scoreboard weights (CONTEXT.md): 0.4*T1 + 0.3*T2 + 0.2*T3 + 0.1*T4.
-_DEFAULT_SCOREBOARD_WEIGHTS: Dict[str, float] = {
-    "T1": 0.4,
-    "T2": 0.3,
-    "T3": 0.2,
-    "T4": 0.1,
-}
+# Re-exported from bracketbench.default_cases for convenience.
+_DEFAULT_SCOREBOARD_WEIGHTS = UNIFIED_SCOREBOARD_WEIGHTS
 
 
 def evaluate(
@@ -127,18 +134,23 @@ def evaluate(
 ) -> Evaluation:
     """Run T1, T2, T3, and T4 against ``model`` and return an ``Evaluation`` with all scores.
 
+    When any ``t*_cases`` argument is ``None`` (the default), the corresponding default
+    case set is used (issue #7), so ``evaluate(model)`` runs all four tests out-of-the-box.
+    Pass an empty list ``[]`` to skip a test, or pass custom cases to override the defaults
+    for that test only.
+
     Args:
         model: An LLM conforming to ``LLMInterface``. Must be initialized or auto-initialize
             on first ``generate`` (the stub model does).
         t1_cases: A list of ``(valid_json, bracket_index)`` pairs defining the T1 cases to
-            run. If empty or None, T1 scores nothing (t1_score defaults to 0).
+            run. ``None`` uses the 24-case vendored default set; ``[]`` skips T1.
         t2_cases: A list of ``(valid_json, bracket_indices)`` pairs defining the T2 cases to
             run (each ``bracket_indices`` is a non-empty list of per-step bracket indexes).
-            If empty or None, T2 scores nothing (t2_score defaults to 0).
+            ``None`` uses the default T2 set; ``[]`` skips T2.
         t4_cases: A list of broken-JSON text strings (no bracket_index) defining the T4
-            cases to run. If empty or None, T4 scores nothing (t4_score defaults to 0).
-        t3_cases: A list of broken notebook JSON strings defining the T3 cases to run. If
-            empty or None, T3 scores nothing (t3_score defaults to 0).
+            cases to run. ``None`` uses the curated default set; ``[]`` skips T4.
+        t3_cases: A list of broken notebook JSON strings defining the T3 cases to run.
+            ``None`` uses the curated default set; ``[]`` skips T3.
         tier_config: The T1/T2 tier scores (ADR-0002). Defaults to ``TierScoreConfig()``.
         t3_check_config: The T3 check weights (ADR-0002). Defaults to ``T3CheckConfig()``.
         scoreboard_weights: The scoreboard weight map. Defaults to the unified scoreboard.
@@ -148,13 +160,13 @@ def evaluate(
         aggregate over whichever tests ran, and per-case audit data.
     """
     if t1_cases is None:
-        t1_cases = []
+        t1_cases = default_t1_cases()
     if t2_cases is None:
-        t2_cases = []
+        t2_cases = list(DEFAULT_T2_CASES)
     if t3_cases is None:
-        t3_cases = []
+        t3_cases = default_t3_cases()
     if t4_cases is None:
-        t4_cases = []
+        t4_cases = default_t4_cases()
     config = tier_config if tier_config is not None else TierScoreConfig()
     scorer = T1T2Scorer(config)
     t3_scorer = T3Scorer(
